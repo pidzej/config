@@ -38,11 +38,22 @@ done
 
 shift $((OPTIND-1))
 server_name=$1
+
+# check if db backup type
+if [ $backup_type == "mysql" ] && [ -z $server_name ]
+then
+	backup_type="db"
+	server_name=$user_name
+fi
+
+# default backup type
 backup_type=${backup_type:-system}
 
+# set proper path
 case $backup_type in 
-	system)      backup_path="$backup_dir/$backup_type/$server_name" ;;
-	users|mysql) backup_path="$backup_dir/$backup_type/$user_name/$server_name" ;;
+	system )      backup_path="$backup_dir/$backup_type/$server_name" ;;
+	users|mysql ) backup_path="$backup_dir/$backup_type/$user_name/$server_name" ;;
+	db )          backup_path="$backup_dir/mysql/_$user_name" ;;
 esac
 
 # listing
@@ -116,7 +127,7 @@ case $backup_type in
 			--preserve-numerical-ids \
 		root@$server_name.rootnode.net::/ $backup_path 2>/dev/null
 		;;
-	mysql )
+	mysql|db )
 		[[ $(ls -A $mysql_tmp/$server_name) ]] || exit 0
 		/usr/bin/rdiff-backup $mysql_tmp/$server_name $backup_path
 		rm -rf -- $mysql_tmp

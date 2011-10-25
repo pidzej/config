@@ -16,8 +16,9 @@ bernstein:
 lyon:
   system: [ allison, wall ]
   users:  [ wall ]
+  mysql:  [ allison ]
 
 allison:
   system: [ lyon, esr, farmer, stallman2, korn, cox, bernstein ]
   users:  [ lyon, cox ]
-  mysql:  [ lyon ] 
+  mysql:  [ allison, lyon, wall, esr ] 

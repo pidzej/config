@@ -12,20 +12,37 @@ set -e
 # usage
 usage() {
 	echo -e "Usage: $0 uid server_name [ exclude_db ]" 
+	echo -e "       $0 server_name [ exclude_db ]"
 	exit 1	
 }
 
 # args
-[ $# -lt 2 ] && usage
+[ $# -lt 1 ] && usage
 
-uid=$1
-[ $uid -ge 2000 ] || usage
-
-server_name=$2
-shift 2
-
-exclude_db=$@
-exclude_db=${exclude_db// /\',\'} # add quotes
+# database listing
+if [[ $1 =~ ^[0-9]+$ ]]
+then 
+	# users databases
+	uid=$1
+	server_name=$2
+	shift 2
+	db_exclude=$@
+	db_exclude="${db_exclude// /\',\'}"  # add quotes
+	db_list=`mysql -h $server_name.rootnode.net -Nse "
+		SELECT DISTINCT table_schema FROM information_schema.tables 
+		WHERE table_schema LIKE 'my{$uid}_%' 
+		AND table_schema NOT IN ('information_schema',$db_exclude)"`
+else
+	# system databases
+	server_name=$2
+	shift
+	db_exclude=$@
+	db_exclude="${db_exclude// /\',\'}" 
+	db_list=`mysql -h $server_name.rootnode.net -Nse "
+		SELECT DISTINCT table_schema FROM information_schema.tables 
+		WHERE table_schema NOT REGEXP '^my[0-9]{4,}_.*';
+		AND table_schema NOT IN ('information_schema',$db_exclude)"`
+fi
 
 # dirs
 mysql_tmp="/backup/mysqltmp"
@@ -36,7 +53,7 @@ mkdir -p -m 700 $mysql_tmp/$server_name
 cd $mysql_tmp/$server_name
 
 # mysqldump
-for database in `mysql -h $server_name.rootnode.net -Nse "SELECT db FROM mysql.db WHERE db like 'my${uid}_%' AND db NOT IN ('$exclude_db')"`
+for database in $db_list
 do
 	mysqldump \
 		--default-character-set=utf8 \
