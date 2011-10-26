@@ -28,21 +28,23 @@ then
 	shift 2
 	db_exclude=$@
 	db_exclude="${db_exclude// /\',\'}"  # add quotes
-	db_list=`mysql -h $server_name.rootnode.net -Nse "
+	db_list=`mysql --defaults-file=/root/.my.$server_name.cnf -Nse "
 		SELECT DISTINCT table_schema FROM information_schema.tables 
 		WHERE table_schema LIKE 'my{$uid}_%' 
-		AND table_schema NOT IN ('information_schema',$db_exclude)"`
+		AND table_schema NOT IN ('information_schema','$db_exclude')"`
 else
 	# system databases
-	server_name=$2
+	server_name=$1
 	shift
 	db_exclude=$@
 	db_exclude="${db_exclude// /\',\'}" 
-	db_list=`mysql -h $server_name.rootnode.net -Nse "
+	db_list=`mysql --defaults-file=/root/.my.$server_name.cnf -Nse "
 		SELECT DISTINCT table_schema FROM information_schema.tables 
-		WHERE table_schema NOT REGEXP '^my[0-9]{4,}_.*';
-		AND table_schema NOT IN ('information_schema',$db_exclude)"`
+		WHERE table_schema NOT REGEXP '^my[0-9]{4,}_.*'
+		AND table_schema NOT IN ('information_schema','$db_exclude')"`
 fi
+
+[[ -z $db_list ]] && exit 0 
 
 # dirs
 mysql_tmp="/backup/mysqltmp"

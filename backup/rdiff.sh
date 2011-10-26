@@ -11,7 +11,14 @@ set -e
 
 # usage
 usage() {
-	echo -e "Usage: $0 [ -l | -r time_spec ] [ -u|-m user_name ] server_name" 
+	echo "Usage: $0 [ -l | -r time_spec ] [ -m | user_name ] server_name"
+	echo ""
+	echo "OPTIONS"
+	echo "   -l              list epoch of the last backup"
+	echo "   -r time_spec    remove backup older than time_spec"
+	echo "   -m user_name    create user mysql backup"
+	echo "   -m server_name  create system mysql backup"
+	echo ""
 	exit 1	
 }
 
@@ -24,42 +31,36 @@ mysql_tmp="/backup/mysqltmp"
 cd $backup_dir 
 
 # options
-while getopts ":lkr:u:m:" opt   # Rum is good.
+while getopts ":lkr:m" opt
 do
 	case $opt in
-	l) do_listing=1                                     ;;
-	k) do_showkey=1                                     ;;
-	r) do_remove=1         ; remove_older_than=$OPTARG  ;;
-	u) backup_type="users" ; user_name=$OPTARG          ;;
-	m) backup_type="mysql" ; user_name=$OPTARG          ;; 
-	*) usage                                            ;;
+	l) do_listing=1 ;;
+	k) do_showkey=1 ;;
+	r) do_remove=1; remove_older_than=$OPTARG ;;
+	m) backup_type="mysql" ;;
+	*) usage ;;
 	esac
 done
 
 shift $((OPTIND-1))
-server_name=$1
-
-# check if db backup type
-if [ $backup_type == "mysql" ] && [ -z $server_name ]
-then
-	backup_type="db"
-	server_name=$user_name
-fi
-
-# default backup type
-backup_type=${backup_type:-system}
+	
+# Bash magic!
+user_name=${2+$1}                                             # user_name = $1 if defined $2
+server_name=${2-$1}                                           # server_name = defined $2 ? $1 : $2
+backup_type=${backup_type}${backup_type+/}${user_name:+users} # add '/' if backup_type defined, add 'users' if user_name defined
+backup_type=${backup_type/%\//\/system}                       # append 'system' if backup_type ends up with '/'
+backup_type=${backup_type:-system}                            # backup_type = system if not defined 
 
 # set proper path
 case $backup_type in 
-	system )      backup_path="$backup_dir/$backup_type/$server_name" ;;
-	users|mysql ) backup_path="$backup_dir/$backup_type/$user_name/$server_name" ;;
-	db )          backup_path="$backup_dir/mysql/_$user_name" ;;
+	system )         backup_path="$backup_dir/$backup_type/$server_name" ;;
+	users|mysql* )   backup_path="$backup_dir/$backup_type/$user_name/$server_name" ;;
 esac
 
 # listing
 if [ $do_listing ] 
 then
-	/usr/bin/rdiff-backup --parsable-output -l $backup_path 2>/dev/null | tail -1 | cut -d' ' -f1
+	/usr/bin/rdiff-backup --parsable-output -l $backup_path 2>/dev/null | grep directory | tail -1 | cut -d' ' -f1
 	exit;
 fi
 
@@ -110,12 +111,11 @@ case $backup_type in
 		;;
 esac
 
-# create directory
-[ -d $backup_path ] || mkdir -p -m 700 $backup_path
 
 # create backup
 case $backup_type in
 	system|users ) 
+		[ -d $backup_path ] || mkdir -p -m 700 $backup_path
 		/usr/bin/rdiff-backup \
 			$rdiff_include \
 			$rdiff_include_special \
@@ -127,8 +127,9 @@ case $backup_type in
 			--preserve-numerical-ids \
 		root@$server_name.rootnode.net::/ $backup_path 2>/dev/null
 		;;
-	mysql|db )
-		[[ $(ls -A $mysql_tmp/$server_name) ]] || exit 0
+	mysql* )
+		[[ $(ls -A $mysql_tmp/$server_name 2>/dev/null | wc -l) -gt 0 ]] || exit 0
+		[ -d $backup_path ] || mkdir -p -m 700 $backup_path
 		/usr/bin/rdiff-backup $mysql_tmp/$server_name $backup_path
 		rm -rf -- $mysql_tmp
 		;;

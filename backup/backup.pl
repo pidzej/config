@@ -22,6 +22,7 @@ my $yaml = YAML::LoadFile($config_file);
 
 my $rdiff     = "/bin/bash $Bin/rdiff.sh";
 my $mysqldump = "/bin/bash $Bin/mysqldump.sh";
+my $rdiff_opt = "\b"; # additional opt for rdiff
 
 my $backup_dir   = '/backup';
 my $mysql_config = '/root/.my.system.cnf';
@@ -42,14 +43,9 @@ my $db_remove_users = $dbh->prepare('SELECT login, uid FROM uids WHERE del=1 ORD
 
 sub check_backup {
         my($backup_type, $server_name, $user_name) = @_;
-	my $last_backup;
 
-	given($backup_type) {
-		when('system') { $last_backup = `$rdiff -l $server_name` }
-		when('users')  { $last_backup = `$rdiff -l -u $user_name $server_name` }
-		when('mysql')  { $last_backup = `$rdiff -l -m $user_name $server_name` }
-	}
-        
+	$user_name ||= "\b";
+	my $last_backup = `$rdiff -l $rdiff_opt $user_name $server_name`;
 	chomp $last_backup;
 
         if($last_backup) {
@@ -66,6 +62,7 @@ sub check_backup {
 }
 
 foreach my $backup_type (qw(system users mysql)) {
+	$rdiff_opt = $backup_type eq 'mysql' ? '-m' : "\b";
 	foreach my $server_name ( @{ $yaml->{$hostname}->{$backup_type} } ) {
 		given($backup_type) {
 			when('system') {
@@ -87,10 +84,22 @@ foreach my $backup_type (qw(system users mysql)) {
 
 			when('mysql') {
 				# mysql system databases
+				my $backup_path="$backup_dir/$backup_type/system/$server_name";
+				$debug and print $backup_path.'.'x(60-length($backup_path));
+				
+				# check for current backup
+				check_backup($backup_type, $server_name) and continue;
+
 				system("$mysqldump $server_name");
 				$debug and print "dump: ".($? ? "\033[1;31merror\033[0m " : "\033[1;32mdone\033[0m ");
+
 				system("$rdiff -m $server_name");
-				$debug and print "dump: ".($? ? "\033[1;31merror\033[0m " : "\033[1;32mdone\033[0m ");
+				$debug and print "rdiff: ".($? ? "\033[1;31merror\033[0m\n" : "\033[1;32mdone\033[0m\n");
+				
+				# remove old backups
+				if(check_backup($backup_type,$server_name,'')) {
+					system("$rdiff -r $remove_older_than -m $server_name");
+				}
 				continue; # IMPORTANT!
 			} # mysql
 
@@ -103,27 +112,26 @@ foreach my $backup_type (qw(system users mysql)) {
 					# check for current backup
 					check_backup($backup_type, $server_name, $user_name) and next;
 
-					given($backup_type) {
-						when('users') {
-							# rdiff-backup
-							system("$rdiff -u $user_name $server_name");
-							$debug and print $? ? "\033[1;31merror\033[0m\n" : "\033[1;32mdone\033[0m\n";
-						} 
-						when('mysql') {
-							# mysqldump
-							system("$mysqldump $user_id $server_name");
-							$debug and print "dump: ".($? ? "\033[1;31merror\033[0m " : "\033[1;32mdone\033[0m ");
-							system("$rdiff -m $user_name $server_name");
-							$debug and print "rdiff: ".($? ? "\033[1;31merror\033[0m\n" : "\033[1;32mdone\033[0m\n");
-						}
-					}
+					if($backup_type eq 'mysql') {
+						# mysqldump
+						system("$mysqldump $user_id $server_name");
+						$debug and print ''.($? ? "\033[1;31merror\033[0m" : "\033[1;32mdone\033[0m").' (dump) ';
+					}		
+	
+					# rdiff-backup
+					system("$rdiff $rdiff_opt $user_name $server_name");
+					$debug and print $? ? "\033[1;31merror\033[0m\n" : "\033[1;32mdone\033[0m\n";
 				} # while
 
 				# remove old backups
 				$db_backup_users->execute;
 				while(my($user_name) = $db_backup_users->fetchrow_array) {
 					if(check_backup($backup_type, $server_name, $user_name)) {
-						system("$rdiff -r $remove_older_than -u $user_name $server_name");
+						
+						given($backup_type) {
+							when('users') { system("$rdiff -r $remove_older_than $user_name $server_name") }
+							when('mysql') { system("$rdiff -r $remove_older_than -m $user_name $server_name") }
+						}
 					}
 				}
 
@@ -131,9 +139,11 @@ foreach my $backup_type (qw(system users mysql)) {
 				$db_remove_users->execute;
 				while(my($user_name) = $db_remove_users->fetchrow_array) {
 					my $backup_path="$backup_dir/$backup_type/$user_name";
+					   $backup_path="$backup_dir/$backup_type/users/$user_name" if $backup_type eq "mysql";
 					rmtree($backup_path) if -d $backup_path;
 				}
-		} # users|mysql
+			} # users|mysql
+		} # given
 	} # server_name
 } # backup_type
 
