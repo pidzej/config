@@ -28,9 +28,9 @@ then
 	shift 2
 	db_exclude=$@
 	db_exclude="${db_exclude// /\',\'}"  # add quotes
-	db_list=`mysql --defaults-file=/root/.my.$server_name.cnf -Nse "
+	db_list=`mysql --defaults-file=/root/.my.$server_name.cnf -Nse " 
 		SELECT DISTINCT table_schema FROM information_schema.tables 
-		WHERE table_schema LIKE 'my{$uid}_%' 
+		WHERE table_schema LIKE 'my${uid}_%' 
 		AND table_schema NOT IN ('information_schema','$db_exclude')"`
 else
 	# system databases
@@ -38,13 +38,17 @@ else
 	shift
 	db_exclude=$@
 	db_exclude="${db_exclude// /\',\'}" 
-	db_list=`mysql --defaults-file=/root/.my.$server_name.cnf -Nse "
-		SELECT DISTINCT table_schema FROM information_schema.tables 
-		WHERE table_schema NOT REGEXP '^my[0-9]{4,}_.*'
+	db_list=`mysql --defaults-file=/root/.my.$server_name.cnf -Nse " 
+		SELECT DISTINCT table_schema FROM information_schema.tables  
+		WHERE table_schema NOT REGEXP '^my[0-9]{4,}_.*' 
 		AND table_schema NOT IN ('information_schema','$db_exclude')"`
 fi
 
-[[ -z $db_list ]] && exit 0 
+if [[ -z $db_list ]] 
+then
+	#echo -e "no databases"
+	exit 0
+fi
 
 # dirs
 mysql_tmp="/backup/mysqltmp"
@@ -58,6 +62,7 @@ cd $mysql_tmp/$server_name
 for database in $db_list
 do
 	mysqldump \
+		--defaults-file=/root/.my.$server_name.cnf \
 		--default-character-set=utf8 \
 		--lock-tables \
 		--complete-insert \

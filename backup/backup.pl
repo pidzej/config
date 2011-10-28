@@ -14,6 +14,7 @@ use YAML qw(LoadFile);
 use FindBin qw($Bin);
 use File::Path qw(rmtree);
 use feature 'switch';
+$|++;
 
 # config
 my $config_file = shift || 'backup.yaml';
@@ -22,7 +23,7 @@ my $yaml = YAML::LoadFile($config_file);
 
 my $rdiff     = "/bin/bash $Bin/rdiff.sh";
 my $mysqldump = "/bin/bash $Bin/mysqldump.sh";
-my $rdiff_opt = "\b"; # additional opt for rdiff
+my $rdiff_opt = ""; # additional opt for rdiff
 
 my $backup_dir   = '/backup';
 my $mysql_config = '/root/.my.system.cnf';
@@ -44,11 +45,12 @@ my $db_remove_users = $dbh->prepare('SELECT login, uid FROM uids WHERE del=1 ORD
 sub check_backup {
         my($backup_type, $server_name, $user_name) = @_;
 
-	$user_name ||= "\b";
+	$user_name ||= "";
+
 	my $last_backup = `$rdiff -l $rdiff_opt $user_name $server_name`;
 	chomp $last_backup;
 
-        if($last_backup) {
+	if($last_backup) {
                 my @current = (localtime(time))[3,4,5];
                 my @backup  = (localtime($last_backup))[3,4,5];
 
@@ -62,7 +64,7 @@ sub check_backup {
 }
 
 foreach my $backup_type (qw(system users mysql)) {
-	$rdiff_opt = $backup_type eq 'mysql' ? '-m' : "\b";
+	$rdiff_opt = '-m' if $backup_type eq 'mysql';
 	foreach my $server_name ( @{ $yaml->{$hostname}->{$backup_type} } ) {
 		given($backup_type) {
 			when('system') {
