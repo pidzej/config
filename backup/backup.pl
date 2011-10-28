@@ -17,7 +17,7 @@ use feature 'switch';
 $|++;
 
 # config
-my $config_file = shift || 'backup.yaml';
+my $config_file = shift || "$Bin/backup.yaml";
 -f $config_file or die "Config file not found!\n";
 my $yaml = YAML::LoadFile($config_file);
 
