@@ -6,3 +6,13 @@ Backup
 
 Backup made with an excellent rdiff-backup tool (http://www.nongnu.org/rdiff-backup/).
 
+PREREQUISITES
+
+1. Database credentials placed in file /root/.my.$server_name.cnf. Content:
+  
+  [client]
+  user=root
+  password=here_goes_password
+  host=put_hostname_here
+
+2. Backup LVM partition mounted to /backup.
