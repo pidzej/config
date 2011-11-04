@@ -10,7 +10,7 @@
 # cox, allison, draper(X), bernstein, t1, t2, t3, t4
 
 bernstein: 
-  system: [ stallman2 ]
+  system: [ stallman2, venema ]
   users:  [ stallman2, venema ]
 
 lyon:
