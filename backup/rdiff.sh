@@ -91,6 +91,9 @@ case $server_name in
 		home_dir="/home/mail"
 		rdiff_include_special="--include=/home/lists"
 		;;
+	venema ) 
+		home_dir="/home2"
+		;;
 esac
 
 # set rdiff includes
