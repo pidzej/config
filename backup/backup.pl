@@ -42,6 +42,8 @@ my $dbh = DBI->connect("dbi:mysql:rootnode;mysql_read_default_file=$mysql_config
 my $db_backup_users = $dbh->prepare('SELECT login, uid FROM uids WHERE block=0 AND del=0 ORDER BY login');
 my $db_remove_users = $dbh->prepare('SELECT login, uid FROM uids WHERE del=1 ORDER BY login');
 
+$dbh->{mysql_auto_reconnect} = 1;
+
 sub check_backup {
         my($backup_type, $server_name, $user_name) = @_;
 
